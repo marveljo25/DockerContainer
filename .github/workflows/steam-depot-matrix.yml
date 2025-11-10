@@ -24,13 +24,7 @@ jobs:
         run: docker pull cm2network/steamcmd
 
       - name: Prepare folder for workshop content
-        run: |
-          mkdir -p ${{ github.workspace }}/workshop_content
-
-      - name: Parse Workshop IDs
-        run: |
-          IFS=',' read -r -a WORKSHOP_IDS <<< "${{ github.event.inputs.workshop_ids }}"
-          echo "WORKSHOP_IDS=${WORKSHOP_IDS[*]}" >> $GITHUB_ENV
+        run: mkdir -p ${{ github.workspace }}/workshop_content
 
       - name: Download Workshop items sequentially
         run: |
@@ -38,18 +32,26 @@ jobs:
           STEAM_USERNAME="ruiiixx"
           STEAM_PASSWORD="S67GBTB83D3Y"
           APPID="${{ github.event.inputs.app_id }}"
+          WORKSHOP_IDS="${{ github.event.inputs.workshop_ids }}"  # keep as string
 
-          for WORKSHOPID in ${{ env.WORKSHOP_IDS }}; do
+          # Split comma-separated string into array
+          IFS=',' read -ra IDS <<< "$WORKSHOP_IDS"
+
+          for WORKSHOPID in "${IDS[@]}"; do
             echo "Downloading Workshop ID $WORKSHOPID..."
 
-            # Use GitHub workspace as mount
-            mkdir -p ${{ github.workspace }}/workshop_content/$APPID/$WORKSHOPID
-            docker run --rm -u $(id -u):$(id -g) \
-              -v "${{ github.workspace }}/workshop_content:/home/steam/Steam/steamapps/workshop/content" \
+            # Use container-local folder to avoid permissions issues
+            mkdir -p /tmp/steam_workshop/$APPID/$WORKSHOPID
+            docker run --rm -u 0 \
+              -v /tmp/steam_workshop:/home/steam/Steam/steamapps/workshop/content \
               cm2network/steamcmd \
               /home/steam/steamcmd/steamcmd.sh +login $STEAM_USERNAME $STEAM_PASSWORD \
               +workshop_download_item $APPID $WORKSHOPID validate \
               +quit
+
+            # Copy downloaded files to GitHub workspace for artifact upload
+            mkdir -p ${{ github.workspace }}/workshop_content/$APPID/$WORKSHOPID
+            cp -r /tmp/steam_workshop/$APPID/$WORKSHOPID/* ${{ github.workspace }}/workshop_content/$APPID/$WORKSHOPID/
 
             echo "Downloaded $WORKSHOPID successfully."
           done
