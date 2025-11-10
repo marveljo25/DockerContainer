@@ -24,29 +24,45 @@ jobs:
         run: docker pull cm2network/steamcmd
 
       - name: Prepare workshop content folder
-        run: mkdir -p ${{ github.workspace }}/workshop_content/${{ github.event.inputs.app_id }}
+        run: |
+          mkdir -p ${{ github.workspace }}/workshop_content/${{ github.event.inputs.app_id }}
+          sudo chown -R 1000:1000 ${{ github.workspace }}/workshop_content
 
       - name: Parse Workshop IDs
         run: |
           IFS=',' read -r -a WORKSHOP_IDS <<< "${{ github.event.inputs.workshop_ids }}"
           echo "WORKSHOP_IDS=${WORKSHOP_IDS[*]}" >> $GITHUB_ENV
 
-      - name: Download Workshop items sequentially
+      - name: Download Workshop items sequentially as root
         run: |
           set -e
-          # Hardcoded Steam credentials
           STEAM_USERNAME="ruiiixx"
           STEAM_PASSWORD="S67GBTB83D3Y"
-          
+
           for WORKSHOPID in ${{ env.WORKSHOP_IDS }}; do
             echo "Downloading Workshop ID $WORKSHOPID..."
-            
-            docker run --rm -v ${{ github.workspace }}/workshop_content:/home/steam/Steam/steamapps/workshop/content cm2network/steamcmd \
-              /home/steam/steamcmd/steamcmd.sh +login $STEAM_USERNAME $STEAM_PASSWORD \
-              +workshop_download_item ${{ github.event.inputs.app_id }} $WORKSHOPID validate \
-              +quit
-              
-            echo "Listing downloaded files for $WORKSHOPID..."
+            RETRY=0
+            SUCCESS=0
+            while [ $RETRY -lt 3 ] && [ $SUCCESS -eq 0 ]; do
+              docker run --rm -u 0 -v ${{ github.workspace }}/workshop_content:/home/steam/Steam/steamapps/workshop/content cm2network/steamcmd \
+                /home/steam/steamcmd/steamcmd.sh +login $STEAM_USERNAME $STEAM_PASSWORD \
+                +workshop_download_item ${{ github.event.inputs.app_id }} $WORKSHOPID validate \
+                +quit
+
+              if [ $? -eq 0 ]; then
+                SUCCESS=1
+              else
+                echo "Download failed, retrying..."
+                RETRY=$((RETRY+1))
+              fi
+            done
+
+            if [ $SUCCESS -eq 0 ]; then
+              echo "Failed to download $WORKSHOPID after 3 attempts."
+            else
+              echo "Downloaded $WORKSHOPID successfully."
+            fi
+
             ls -R ${{ github.workspace }}/workshop_content/${{ github.event.inputs.app_id }}/$WORKSHOPID || true
           done
 
