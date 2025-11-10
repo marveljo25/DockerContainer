@@ -2,16 +2,19 @@ name: Wallpaper Engine Workshop Downloader
 
 on:
   workflow_dispatch:
+    inputs:
+      workshop_ids:
+        description: "Comma-separated Workshop IDs (e.g., 1562118779,1562119999)"
+        required: true
+        default: "1562118779"
+      app_id:
+        description: "Wallpaper Engine AppID"
+        required: true
+        default: "431960"
 
 jobs:
-  workshop-items:
+  download-workshop:
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        workshop: 
-          - "431960|1562118779"  # AppID|WorkshopFileID (Wallpaper Engine example)
-      # Sequential download (no parallel)
 
     steps:
       - name: Checkout repository
@@ -20,27 +23,31 @@ jobs:
       - name: Pull SteamCMD Docker image
         run: docker pull cm2network/steamcmd
 
-      - name: Parse AppID and WorkshopID
+      - name: Parse AppID and Workshop IDs
         run: |
-          IFS='|' read -r APPID WORKSHOPID <<< "${{ matrix.workshop }}"
+          APPID=${{ github.event.inputs.app_id }}
           echo "APPID=$APPID" >> $GITHUB_ENV
-          echo "WORKSHOPID=$WORKSHOPID" >> $GITHUB_ENV
 
-      - name: Create download folder
-        run: mkdir -p ${{ github.workspace }}/workshop_${{ env.WORKSHOPID }}
+          IFS=',' read -r -a WORKSHOP_IDS <<< "${{ github.event.inputs.workshop_ids }}"
+          echo "WORKSHOP_IDS=${WORKSHOP_IDS[*]}" >> $GITHUB_ENV
 
-      - name: Download Workshop item
+      - name: Download Workshop items sequentially
         run: |
-          docker run --rm -v ${{ github.workspace }}/workshop_${{ env.WORKSHOPID }}:/steamcmd/depot cm2network/steamcmd \
-          /home/steam/steamcmd.sh +login ruiiixx UzY3R0JUQjgzRDNZ \
-          +workshop_download_item ${{ env.APPID }} ${{ env.WORKSHOPID }} validate \
-          +quit
+          for WORKSHOPID in ${{ env.WORKSHOP_IDS }}; do
+            echo "Downloading Workshop ID $WORKSHOPID..."
+            mkdir -p ${{ github.workspace }}/workshop_$WORKSHOPID
 
-      - name: List downloaded files
-        run: ls -R ${{ github.workspace }}/workshop_${{ env.WORKSHOPID }}
+            docker run --rm -v ${{ github.workspace }}/workshop_$WORKSHOPID:/steamcmd/depot cm2network/steamcmd \
+              /home/steam/steamcmd/steamcmd.sh +login ruiiixx UzY3R0JUQjgzRDNZ \
+              +workshop_download_item ${{ env.APPID }} $WORKSHOPID validate \
+              +quit
 
-      - name: Upload as artifact
+            echo "Listing downloaded files for $WORKSHOPID..."
+            ls -R ${{ github.workspace }}/workshop_$WORKSHOPID
+          done
+
+      - name: Upload all Workshop items as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: workshop-${{ env.WORKSHOPID }}
-          path: ${{ github.workspace }}/workshop_${{ env.WORKSHOPID }}
+          name: wallpaper-workshop-items
+          path: ${{ github.workspace }}/workshop_*/
