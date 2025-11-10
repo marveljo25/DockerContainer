@@ -1,16 +1,17 @@
-name: Steam Depot Docker Download (Single Job, Browser Download)
+name: Wallpaper Engine Workshop Downloader
 
 on:
   workflow_dispatch:
 
 jobs:
-  steam-depots:
+  workshop-items:
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
-        depot: 
-          - "431960|ruiiixx|UzY3R0JUQjgzRDNZ"  # Wallpaper Engine
+        workshop: 
+          - "431960|1562118779"  # AppID|WorkshopFileID (Wallpaper Engine example)
+      # Sequential download (no parallel)
 
     steps:
       - name: Checkout repository
@@ -19,29 +20,27 @@ jobs:
       - name: Pull SteamCMD Docker image
         run: docker pull cm2network/steamcmd
 
-      - name: Parse AppID and Credentials
+      - name: Parse AppID and WorkshopID
         run: |
-          IFS='|' read -r APPID USER PASS <<< "${{ matrix.depot }}"
+          IFS='|' read -r APPID WORKSHOPID <<< "${{ matrix.workshop }}"
           echo "APPID=$APPID" >> $GITHUB_ENV
-          echo "USER=$USER" >> $GITHUB_ENV
-          echo "PASS=$PASS" >> $GITHUB_ENV
+          echo "WORKSHOPID=$WORKSHOPID" >> $GITHUB_ENV
 
       - name: Create download folder
-        run: mkdir -p ${{ github.workspace }}/depot_${{ env.APPID }}
+        run: mkdir -p ${{ github.workspace }}/workshop_${{ env.WORKSHOPID }}
 
-      - name: Download Steam Depot
+      - name: Download Workshop item
         run: |
-          docker run --rm -v ${{ github.workspace }}/depot_${{ env.APPID }}:/steamcmd/depot cm2network/steamcmd \
-          +login ${{ env.USER }} ${{ env.PASS }} \
-          +force_install_dir /steamcmd/depot \
-          +app_update ${{ env.APPID }} validate \
+          docker run --rm -v ${{ github.workspace }}/workshop_${{ env.WORKSHOPID }}:/steamcmd/depot cm2network/steamcmd \
+          /home/steam/steamcmd.sh +login ruiiixx UzY3R0JUQjgzRDNZ \
+          +workshop_download_item ${{ env.APPID }} ${{ env.WORKSHOPID }} validate \
           +quit
 
       - name: List downloaded files
-        run: ls -R ${{ github.workspace }}/depot_${{ env.APPID }}
+        run: ls -R ${{ github.workspace }}/workshop_${{ env.WORKSHOPID }}
 
-      - name: Upload depot as artifact
+      - name: Upload as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: steam-depot-${{ env.APPID }}
-          path: ${{ github.workspace }}/depot_${{ env.APPID }}
+          name: workshop-${{ env.WORKSHOPID }}
+          path: ${{ github.workspace }}/workshop_${{ env.WORKSHOPID }}
