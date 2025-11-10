@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       workshop_ids:
-        description: "Comma-separated Workshop IDs (e.g., 1562118779,1562119999)"
+        description: "Comma-separated Workshop IDs (e.g., 1562118779,1562120000)"
         required: true
         default: "1562118779"
       app_id:
@@ -23,51 +23,42 @@ jobs:
       - name: Pull SteamCMD Docker image
         run: docker pull cm2network/steamcmd
 
-      - name: Prepare workshop content folder
+      - name: Prepare host folder for artifacts
         run: |
-          mkdir -p ${{ github.workspace }}/workshop_content/${{ github.event.inputs.app_id }}
-          sudo chown -R 1000:1000 ${{ github.workspace }}/workshop_content
+          mkdir -p ${{ github.workspace }}/workshop_content
+          sudo chmod -R 777 ${{ github.workspace }}/workshop_content
 
       - name: Parse Workshop IDs
         run: |
           IFS=',' read -r -a WORKSHOP_IDS <<< "${{ github.event.inputs.workshop_ids }}"
           echo "WORKSHOP_IDS=${WORKSHOP_IDS[*]}" >> $GITHUB_ENV
 
-      - name: Download Workshop items sequentially as root
+      - name: Download Workshop items sequentially
         run: |
           set -e
           STEAM_USERNAME="ruiiixx"
           STEAM_PASSWORD="S67GBTB83D3Y"
+          APPID="${{ github.event.inputs.app_id }}"
 
           for WORKSHOPID in ${{ env.WORKSHOP_IDS }}; do
             echo "Downloading Workshop ID $WORKSHOPID..."
-            RETRY=0
-            SUCCESS=0
-            while [ $RETRY -lt 3 ] && [ $SUCCESS -eq 0 ]; do
-              docker run --rm -u 0 -v ${{ github.workspace }}/workshop_content:/home/steam/Steam/steamapps/workshop/content cm2network/steamcmd \
-                /home/steam/steamcmd/steamcmd.sh +login $STEAM_USERNAME $STEAM_PASSWORD \
-                +workshop_download_item ${{ github.event.inputs.app_id }} $WORKSHOPID validate \
-                +quit
 
-              if [ $? -eq 0 ]; then
-                SUCCESS=1
-              else
-                echo "Download failed, retrying..."
-                RETRY=$((RETRY+1))
-              fi
-            done
+            # Use a container-local folder to avoid permissions issues
+            mkdir -p /tmp/steam_workshop/$APPID/$WORKSHOPID
+            docker run --rm -u 0 -v /tmp/steam_workshop:/home/steam/Steam/steamapps/workshop/content cm2network/steamcmd \
+              /home/steam/steamcmd/steamcmd.sh +login $STEAM_USERNAME $STEAM_PASSWORD \
+              +workshop_download_item $APPID $WORKSHOPID validate \
+              +quit
 
-            if [ $SUCCESS -eq 0 ]; then
-              echo "Failed to download $WORKSHOPID after 3 attempts."
-            else
-              echo "Downloaded $WORKSHOPID successfully."
-            fi
+            # Copy downloaded files to GitHub workspace
+            mkdir -p ${{ github.workspace }}/workshop_content/$APPID/$WORKSHOPID
+            cp -r /tmp/steam_workshop/$APPID/$WORKSHOPID/* ${{ github.workspace }}/workshop_content/$APPID/$WORKSHOPID/
 
-            ls -R ${{ github.workspace }}/workshop_content/${{ github.event.inputs.app_id }}/$WORKSHOPID || true
+            echo "Downloaded $WORKSHOPID successfully."
           done
 
-      - name: Upload all Workshop items as artifacts
+      - name: Upload all Workshop items as artifact
         uses: actions/upload-artifact@v4
         with:
           name: wallpaper-workshop-items
-          path: ${{ github.workspace }}/workshop_content/${{ github.event.inputs.app_id }}
+          path: ${{ github.workspace }}/workshop_content
