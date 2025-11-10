@@ -38,7 +38,7 @@ jobs:
             mkdir -p ${{ github.workspace }}/workshop_$WORKSHOPID
 
             docker run --rm -v ${{ github.workspace }}/workshop_$WORKSHOPID:/steamcmd/depot cm2network/steamcmd \
-              /home/steam/steamcmd/steamcmd.sh +login ruiiixx UzY3R0JUQjgzRDNZ \
+              /home/steam/steamcmd/steamcmd.sh +login ruiiixx S67GBTB83D3Y \
               +workshop_download_item ${{ env.APPID }} $WORKSHOPID validate \
               +quit
 
