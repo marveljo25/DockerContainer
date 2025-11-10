@@ -1,0 +1,48 @@
+name: Steam Depot Docker Download (Public Account)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  steam-depots:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        depot: 
+          - "431960|ruiiixx|UzY3R0JUQjgzRDNZ"  # Wallpaper Engine
+      # No max-parallel → jobs run sequentially
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Pull SteamCMD Docker image
+        run: docker pull cm2network/steamcmd
+
+      - name: Parse AppID and Credentials
+        run: |
+          IFS='|' read -r APPID USER PASS <<< "${{ matrix.depot }}"
+          echo "APPID=$APPID" >> $GITHUB_ENV
+          echo "USER=$USER" >> $GITHUB_ENV
+          echo "PASS=$PASS" >> $GITHUB_ENV
+
+      - name: Create download folder
+        run: mkdir -p ${{ github.workspace }}/depot_${{ env.APPID }}
+
+      - name: Download Steam Depot
+        run: |
+          docker run --rm -v ${{ github.workspace }}/depot_${{ env.APPID }}:/steamcmd/depot cm2network/steamcmd \
+          +login ${{ env.USER }} ${{ env.PASS }} \
+          +force_install_dir /steamcmd/depot \
+          +app_update ${{ env.APPID }} validate \
+          +quit
+
+      - name: List downloaded files
+        run: ls -R ${{ github.workspace }}/depot_${{ env.APPID }}
+
+      - name: Upload depot as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: steam-depot-${{ env.APPID }}
+          path: ${{ github.workspace }}/depot_${{ env.APPID }}
