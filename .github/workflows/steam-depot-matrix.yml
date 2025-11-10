@@ -23,10 +23,9 @@ jobs:
       - name: Pull SteamCMD Docker image
         run: docker pull cm2network/steamcmd
 
-      - name: Prepare host folder for artifacts
+      - name: Prepare folder for workshop content
         run: |
           mkdir -p ${{ github.workspace }}/workshop_content
-          sudo chmod -R 777 ${{ github.workspace }}/workshop_content
 
       - name: Parse Workshop IDs
         run: |
@@ -43,16 +42,14 @@ jobs:
           for WORKSHOPID in ${{ env.WORKSHOP_IDS }}; do
             echo "Downloading Workshop ID $WORKSHOPID..."
 
-            # Use a container-local folder to avoid permissions issues
-            mkdir -p /tmp/steam_workshop/$APPID/$WORKSHOPID
-            docker run --rm -u 0 -v /tmp/steam_workshop:/home/steam/Steam/steamapps/workshop/content cm2network/steamcmd \
+            # Use GitHub workspace as mount
+            mkdir -p ${{ github.workspace }}/workshop_content/$APPID/$WORKSHOPID
+            docker run --rm -u $(id -u):$(id -g) \
+              -v "${{ github.workspace }}/workshop_content:/home/steam/Steam/steamapps/workshop/content" \
+              cm2network/steamcmd \
               /home/steam/steamcmd/steamcmd.sh +login $STEAM_USERNAME $STEAM_PASSWORD \
               +workshop_download_item $APPID $WORKSHOPID validate \
               +quit
-
-            # Copy downloaded files to GitHub workspace
-            mkdir -p ${{ github.workspace }}/workshop_content/$APPID/$WORKSHOPID
-            cp -r /tmp/steam_workshop/$APPID/$WORKSHOPID/* ${{ github.workspace }}/workshop_content/$APPID/$WORKSHOPID/
 
             echo "Downloaded $WORKSHOPID successfully."
           done
