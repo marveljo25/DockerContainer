@@ -23,31 +23,35 @@ jobs:
       - name: Pull SteamCMD Docker image
         run: docker pull cm2network/steamcmd
 
-      - name: Parse AppID and Workshop IDs
-        run: |
-          APPID=${{ github.event.inputs.app_id }}
-          echo "APPID=$APPID" >> $GITHUB_ENV
+      - name: Prepare workshop content folder
+        run: mkdir -p ${{ github.workspace }}/workshop_content/${{ github.event.inputs.app_id }}
 
+      - name: Parse Workshop IDs
+        run: |
           IFS=',' read -r -a WORKSHOP_IDS <<< "${{ github.event.inputs.workshop_ids }}"
           echo "WORKSHOP_IDS=${WORKSHOP_IDS[*]}" >> $GITHUB_ENV
 
       - name: Download Workshop items sequentially
         run: |
+          set -e
+          # Hardcoded Steam credentials
+          STEAM_USERNAME="ruiiixx"
+          STEAM_PASSWORD="S67GBTB83D3Y"
+          
           for WORKSHOPID in ${{ env.WORKSHOP_IDS }}; do
             echo "Downloading Workshop ID $WORKSHOPID..."
-            mkdir -p ${{ github.workspace }}/workshop_$WORKSHOPID
-
-            docker run --rm -v ${{ github.workspace }}/workshop_$WORKSHOPID:/steamcmd/depot cm2network/steamcmd \
-              /home/steam/steamcmd/steamcmd.sh +login ruiiixx S67GBTB83D3Y \
-              +workshop_download_item ${{ env.APPID }} $WORKSHOPID validate \
+            
+            docker run --rm -v ${{ github.workspace }}/workshop_content:/home/steam/Steam/steamapps/workshop/content cm2network/steamcmd \
+              /home/steam/steamcmd/steamcmd.sh +login $STEAM_USERNAME $STEAM_PASSWORD \
+              +workshop_download_item ${{ github.event.inputs.app_id }} $WORKSHOPID validate \
               +quit
-
+              
             echo "Listing downloaded files for $WORKSHOPID..."
-            ls -R ${{ github.workspace }}/workshop_$WORKSHOPID
+            ls -R ${{ github.workspace }}/workshop_content/${{ github.event.inputs.app_id }}/$WORKSHOPID || true
           done
 
-      - name: Upload all Workshop items as artifact
+      - name: Upload all Workshop items as artifacts
         uses: actions/upload-artifact@v4
         with:
           name: wallpaper-workshop-items
-          path: ${{ github.workspace }}/workshop_*/
+          path: ${{ github.workspace }}/workshop_content/${{ github.event.inputs.app_id }}
