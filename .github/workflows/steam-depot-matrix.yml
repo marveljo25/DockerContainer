@@ -4,9 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       workshop_ids:
-        description: "Comma-separated Workshop IDs (e.g., 1562118779,1562120000)"
+        description: "Comma-separated Workshop IDs (e.g., 1562118779,2259807269)"
         required: true
-        default: "1562118779"
       app_id:
         description: "Wallpaper Engine AppID"
         required: true
@@ -30,18 +29,20 @@ jobs:
         run: |
           set -e
 
-          # --- Inputs ---
           STEAM_USERNAME="ruiiixx"
           STEAM_PASSWORD="S67GBTB83D3Y"
           APPID="${{ github.event.inputs.app_id }}"
           WORKSHOP_IDS="${{ github.event.inputs.workshop_ids }}"
 
+          # Split comma-separated IDs into array
           IFS=',' read -ra IDS <<< "$WORKSHOP_IDS"
 
+          # Loop sequentially
           for WORKSHOPID in "${IDS[@]}"; do
             echo "Downloading Workshop ID $WORKSHOPID..."
             CONTAINER_NAME="steam_${WORKSHOPID}_$$"
 
+            # Run SteamCMD in Docker
             docker run --name $CONTAINER_NAME \
               cm2network/steamcmd \
               /home/steam/steamcmd/steamcmd.sh \
@@ -50,13 +51,14 @@ jobs:
               +workshop_download_item $APPID $WORKSHOPID validate \
               +quit
 
-            # Copy and flatten folder structure
+            # Copy only the actual package files to workspace (flattened)
             DEST_DIR="${{ github.workspace }}/workshop_content/$WORKSHOPID"
             mkdir -p "$DEST_DIR"
-            # Find all files under nested steamapps/workshop/content and move to flat folder
             docker cp $CONTAINER_NAME:/home/steam/Steam/steamapps/workshop/content/$APPID/$WORKSHOPID/. "$DEST_DIR/"
 
+            # Remove container
             docker rm $CONTAINER_NAME
+
             echo "Downloaded $WORKSHOPID successfully."
           done
 
