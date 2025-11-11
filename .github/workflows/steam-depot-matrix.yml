@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       workshop_ids:
-        description: "Comma-separated Workshop IDs (e.g., 1562118779,1562120000)"
+        description: "Comma-separated Workshop IDs"
         required: true
         default: "1562118779"
       app_id:
@@ -23,7 +23,7 @@ jobs:
       - name: Pull SteamCMD Docker image
         run: docker pull cm2network/steamcmd
 
-      - name: Prepare GitHub workspace folder for artifacts
+      - name: Prepare workspace folder
         run: mkdir -p ${{ github.workspace }}/workshop_content
 
       - name: Download Workshop items sequentially
@@ -34,29 +34,25 @@ jobs:
           APPID="${{ github.event.inputs.app_id }}"
           WORKSHOP_IDS="${{ github.event.inputs.workshop_ids }}"
 
-          # Split comma-separated string into array
           IFS=',' read -ra IDS <<< "$WORKSHOP_IDS"
 
           for WORKSHOPID in "${IDS[@]}"; do
             echo "Downloading Workshop ID $WORKSHOPID..."
 
-            # Container-local folder for SteamCMD
-            CONTAINER_DIR="/tmp/steam_workshop/$APPID/$WORKSHOPID"
-            mkdir -p "$CONTAINER_DIR"
-
-            docker run --rm -u 0 \
-              -v "/tmp/steam_workshop:/home/steam/Steam/steamapps/workshop/content" \
+            # Use a unique container name to copy files later
+            CONTAINER_NAME="steam_${WORKSHOPID}_$$"
+            
+            docker run --name $CONTAINER_NAME --rm \
               cm2network/steamcmd \
               /home/steam/steamcmd/steamcmd.sh \
-              +force_install_dir "/home/steam/Steam/steamapps/workshop/content/$APPID/$WORKSHOPID" \
+              +force_install_dir "/steamcmd/depot" \
               +login $STEAM_USERNAME $STEAM_PASSWORD \
               +workshop_download_item $APPID $WORKSHOPID validate \
               +quit
 
-            # Copy downloaded files from container-local folder to GitHub workspace
-            mkdir -p ${{ github.workspace }}/workshop_content/$APPID/$WORKSHOPID
-            cp -r "$CONTAINER_DIR/"* "${{ github.workspace }}/workshop_content/$APPID/$WORKSHOPID/"
-
+            # Copy files from container-local folder to GitHub workspace
+            mkdir -p "${{ github.workspace }}/workshop_content/$APPID/$WORKSHOPID"
+            docker cp $CONTAINER_NAME:/steamcmd/depot/. "${{ github.workspace }}/workshop_content/$APPID/$WORKSHOPID/"
             echo "Downloaded $WORKSHOPID successfully."
           done
 
