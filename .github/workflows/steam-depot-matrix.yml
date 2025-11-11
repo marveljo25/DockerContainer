@@ -48,8 +48,8 @@ jobs:
               -v "/tmp/steam_workshop:/home/steam/Steam/steamapps/workshop/content" \
               cm2network/steamcmd \
               /home/steam/steamcmd/steamcmd.sh \
-              +login $STEAM_USERNAME $STEAM_PASSWORD \
               +force_install_dir "/home/steam/Steam/steamapps/workshop/content/$APPID/$WORKSHOPID" \
+              +login $STEAM_USERNAME $STEAM_PASSWORD \
               +workshop_download_item $APPID $WORKSHOPID validate \
               +quit
 
