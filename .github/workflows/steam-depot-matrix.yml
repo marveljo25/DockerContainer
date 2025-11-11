@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       workshop_ids:
-        description: "Comma-separated Workshop IDs (e.g., 1562118779,1562120000)"
+        description: "Comma-separated Workshop IDs"
         required: true
         default: "1562118779"
       app_id:
@@ -39,23 +39,22 @@ jobs:
           for WORKSHOPID in "${IDS[@]}"; do
             echo "Downloading Workshop ID $WORKSHOPID..."
 
-            # Create a unique container name
             CONTAINER_NAME="steam_${WORKSHOPID}_$$"
 
-            # Run SteamCMD inside Docker without --rm
+            # Use container-local path matching Steam's default path
             docker run --name $CONTAINER_NAME \
               cm2network/steamcmd \
               /home/steam/steamcmd/steamcmd.sh \
-              +force_install_dir "/steamcmd/depot" \
+              +force_install_dir "/home/steam/Steam/steamapps/workshop/content/$APPID/$WORKSHOPID" \
               +login $STEAM_USERNAME $STEAM_PASSWORD \
               +workshop_download_item $APPID $WORKSHOPID validate \
               +quit
 
-            # Copy downloaded files from container-local folder to GitHub workspace
+            # Copy downloaded files to GitHub workspace
             mkdir -p "${{ github.workspace }}/workshop_content/$APPID/$WORKSHOPID"
-            docker cp $CONTAINER_NAME:/steamcmd/depot/. "${{ github.workspace }}/workshop_content/$APPID/$WORKSHOPID/"
+            docker cp $CONTAINER_NAME:/home/steam/Steam/steamapps/workshop/content/$APPID/$WORKSHOPID/. "${{ github.workspace }}/workshop_content/$APPID/$WORKSHOPID/"
 
-            # Remove the container now that files are copied
+            # Remove container
             docker rm $CONTAINER_NAME
 
             echo "Downloaded $WORKSHOPID successfully."
