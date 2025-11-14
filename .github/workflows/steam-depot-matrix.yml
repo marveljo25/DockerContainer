@@ -1,72 +1,42 @@
-name: Wallpaper Engine Workshop Downloader
+name: Auto Workshop Downloader (No Commit Needed)
 
 on:
   workflow_dispatch:
     inputs:
-      workshop_ids:
-        description: "Comma-separated Workshop IDs (e.g., 1562118779,2259807269)"
+      workshop_id:
+        description: "Workshop ID"
         required: true
       app_id:
-        description: "Wallpaper Engine AppID"
+        description: "App ID (example: 431960)"
         required: true
-        default: "431960"
 
 jobs:
-  download-workshop:
-    runs-on: ubuntu-latest
+  download:
+    runs-on: windows-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Install .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
 
-      - name: Install dependencies (.NET + unrar)
+      - name: Download DepotDownloaderMod Release
         run: |
-          sudo apt update
-          sudo apt install -y unrar dotnet-sdk-8.0
+          curl -L -o release.rar https://github.com/SteamAutoCracks/DepotDownloaderMod/releases/latest/download/Release.rar
 
-      - name: Download DepotDownloaderMod Release.rar
+      - name: Extract RAR
         run: |
-          echo "Downloading DepotDownloaderMod Release.rar..."
-          wget -O Release.rar \
-            "https://github.com/SteamAutoCracks/DepotDownloaderMod/releases/latest/download/Release.rar"
+          7z x release.rar -orelease
 
-          mkdir depot
-          unrar x Release.rar depot/
+      - name: Run DepotDownloaderMod
+        run: >
+          dotnet "release/Release/net9.0/DepotDownloaderMod.dll"
+          --app ${{ github.event.inputs.app_id }}
+          --workshopitem ${{ github.event.inputs.workshop_id }}
+          --dir output
 
-      - name: Prepare workspace folder
-        run: mkdir -p ${{ github.workspace }}/workshop_content
-
-      - name: Download workshop items using DepotDownloaderMod
-        run: |
-          set -e
-          
-          STEAM_USERNAME="ruiiixx"
-          STEAM_PASSWORD="S67GBTB83D3Y"
-
-          APPID="${{ github.event.inputs.app_id }}"
-          WORKSHOP_IDS="${{ github.event.inputs.workshop_ids }}"
-
-          IFS=',' read -ra IDS <<< "$WORKSHOP_IDS"
-
-          for WORKSHOP_ID in "${IDS[@]}"; do
-            echo "Downloading Workshop ID: $WORKSHOP_ID"
-
-            OUTDIR="${{ github.workspace }}/workshop_content/$WORKSHOP_ID"
-            mkdir -p "$OUTDIR"
-
-            dotnet depot/DepotDownloader.dll \
-              -app $APPID \
-              -pubfile $WORKSHOP_ID \
-              -username "$STEAM_USERNAME" \
-              -password "$STEAM_PASSWORD" \
-              -dir "$OUTDIR"
-
-            echo "Finished: $WORKSHOP_ID"
-          done
-
-      - name: Upload all workshop items
+      - name: Upload Result
         uses: actions/upload-artifact@v4
         with:
-          name: wallpaper-workshop-items
-          path: ${{ github.workspace }}/workshop_content
-          retention-days: 1
+          name: workshop-download
+          path: output
