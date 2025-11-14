@@ -19,19 +19,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Install dependencies
+      - name: Install dependencies (.NET + unrar)
         run: |
           sudo apt update
-          sudo apt install -y unzip dotnet-sdk-8.0
+          sudo apt install -y unrar dotnet-sdk-8.0
 
-      - name: Download DepotDownloaderMod latest release
+      - name: Download DepotDownloaderMod Release.rar
         run: |
-          LATEST_URL=$(curl -s https://api.github.com/repos/SteamAutoCracks/DepotDownloaderMod/releases/latest \
-            | grep "browser_download_url" | grep "linux" | cut -d '"' -f 4)
+          echo "Downloading DepotDownloaderMod Release.rar..."
+          wget -O Release.rar \
+            "https://github.com/SteamAutoCracks/DepotDownloaderMod/releases/latest/download/Release.rar"
 
-          echo "Downloading: $LATEST_URL"
-          wget -O depotdownloader.zip "$LATEST_URL"
-          unzip depotdownloader.zip -d depot
+          mkdir depot
+          unrar x Release.rar depot/
 
       - name: Prepare workspace folder
         run: mkdir -p ${{ github.workspace }}/workshop_content
