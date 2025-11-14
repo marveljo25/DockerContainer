@@ -1,14 +1,16 @@
-name: Auto Workshop Downloader (No Commit Needed)
+name: DepotDownloaderMod EXE Downloader
 
 on:
   workflow_dispatch:
     inputs:
-      workshop_id:
-        description: "Workshop ID"
+      pubfileid:
+        description: "Workshop pubfile ID"
         required: true
+
       app_id:
-        description: "App ID (example: 431960)"
-        required: true
+        description: "Steam App ID (default = 431960)"
+        required: false
+        default: "431960"
 
 jobs:
   download:
@@ -28,15 +30,17 @@ jobs:
         run: |
           7z x release.rar -orelease
 
-      - name: Run DepotDownloaderMod
+      - name: Run DepotDownloaderMod.exe
         run: >
-          dotnet "release/Release/net9.0/DepotDownloaderMod.dll"
-          --app ${{ github.event.inputs.app_id }}
-          --workshopitem ${{ github.event.inputs.workshop_id }}
-          --dir output
+          release/Release/net9.0/DepotDownloaderMod.exe
+          -app ${{ github.event.inputs.app_id }}
+          -pubfile ${{ github.event.inputs.pubfileid }}
+          -verify-all
+          -username "YOUR_USERNAME_HERE"
+          -password "YOUR_PASSWORD_HERE"
 
-      - name: Upload Result
+      - name: Upload downloaded content
         uses: actions/upload-artifact@v4
         with:
-          name: workshop-download
-          path: output
+          name: depotdownload
+          path: .
