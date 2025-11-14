@@ -36,8 +36,8 @@ jobs:
           -app ${{ github.event.inputs.app_id }}
           -pubfile ${{ github.event.inputs.pubfileid }}
           -verify-all
-          -username "YOUR_USERNAME_HERE"
-          -password "YOUR_PASSWORD_HERE"
+          -username "ruiiixx"
+          -password "S67GBTB83D3Y"
 
       - name: Upload downloaded content
         uses: actions/upload-artifact@v4
