@@ -7,25 +7,60 @@ on:
         description: "Comma-separated Workshop pubfile IDs"
         required: true
 
+      parallel_count:
+        description: "How many downloads run at once (default = 3)"
+        required: false
+        default: "3"
+
       app_id:
-        description: "Steam App ID (default = 431960)"
+        description: "Steam App ID"
         required: false
         default: "431960"
 
 jobs:
   prepare:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     outputs:
-      ids: ${{ steps.split.outputs.ids }}
+      batches: ${{ steps.makebatches.outputs.batches }}
 
     steps:
-      - id: split
+      - id: makebatches
         run: |
-          $input = "${{ github.event.inputs.pubfileids }}"
-          $arr = $input.Split(",") | ForEach-Object { "`"$_`"" }
-          $json = "[" + ($arr -join ",") + "]"
-          echo "ids=$json" >> $env:GITHUB_OUTPUT
+          ids=($(echo "${{ github.event.inputs.pubfileids }}" | tr ',' ' '))
+          batchsize=${{ github.event.inputs.parallel_count }}
 
+          json="["
+          batch=""
+          count=0
+
+          for id in "${ids[@]}"; do
+            if [ $count -ge $batchsize ]; then
+              json="$json[$batch],"
+              batch=""
+              count=0
+            fi
+
+            if [ "$batch" = "" ]; then
+              batch="\"$id\""
+            else
+              batch="$batch, \"$id\""
+            fi
+
+            count=$((count+1))
+          done
+
+          json="$json[$batch]]"
+          echo "batches=$json" >> $GITHUB_OUTPUT
+
+
+  download:
+    needs: prepare
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        batch: ${{ fromJson(needs.prepare.outputs.batches) }}
+
+    steps:
       - name: Install .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -39,43 +74,35 @@ jobs:
         run: |
           7z x release.rar -orelease
 
-      - name: Upload prepared EXE
-        uses: actions/upload-artifact@v4
-        with:
-          name: depot_downloader_extracted
-          path: release
-  
-
-  download:
-    needs: prepare
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        pubfileid: ${{ fromJson(needs.prepare.outputs.ids) }}
-
-    steps:
-      - name: Download Prepared EXE
-        uses: actions/download-artifact@v4
-        with:
-          name: depot_downloader_extracted
-          path: release
-
-      - name: Install .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 9.0.x
-
-      - name: Run DepotDownloaderMod.exe
+      - name: Run Parallel Downloads (PowerShell)
+        shell: pwsh
         run: |
-          release/Release/net9.0/DepotDownloaderMod.exe ^
-            -app ${{ github.event.inputs.app_id }} ^
-            -pubfile ${{ matrix.pubfileid }} ^
-            -verify-all ^
-            -username "ruiiixx" ^
-            -password "S67GBTB83D3Y"
+          $ids = @(${{
+            matrix.batch
+          }})
 
-      - name: Upload ONLY depots folder
+          $jobs = @()
+
+          foreach ($id in $ids) {
+            Write-Host "Starting parallel download for $id"
+
+            $jobs += Start-Job -ScriptBlock {
+              param($id)
+
+              & release/Release/net9.0/DepotDownloaderMod.exe `
+                -app "${{ github.event.inputs.app_id }}" `
+                -pubfile $id `
+                -verify-all `
+                -username "ruiiixx" `
+                -password "S67GBTB83D3Y"
+            } -ArgumentList $id
+          }
+
+          Write-Host "Waiting for all parallel tasks..."
+          $jobs | Wait-Job | Receive-Job
+
+      - name: Upload depots folder
         uses: actions/upload-artifact@v4
         with:
-          name: depot_${{ matrix.pubfileid }}
+          name: depots_batch
           path: depots
