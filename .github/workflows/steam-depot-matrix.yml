@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       pubfileids:
-        description: "Comma-separated Workshop pubfile IDs (e.g. 2898186348,1181580583)"
+        description: "Comma-separated Workshop pubfile IDs"
         required: true
 
       app_id:
@@ -34,15 +34,14 @@ jobs:
         shell: pwsh
         run: |
           $ids = "${{ github.event.inputs.pubfileids }}".Split(",")
+          $output = "output/431960"
+          New-Item -ItemType Directory -Force -Path $output | Out-Null
 
           foreach ($id in $ids) {
             $trimmed = $id.Trim()
             echo "Processing pubfile ID: $trimmed"
 
-            # Make dedicated output folder for each ID
-            New-Item -ItemType Directory -Force -Path "output/$trimmed" | Out-Null
-
-            # Run EXE for this pubfile
+            # Run downloader
             & release/Release/net9.0/DepotDownloaderMod.exe `
               -app ${{ github.event.inputs.app_id }} `
               -pubfile $trimmed `
@@ -50,10 +49,23 @@ jobs:
               -username "ruiiixx" `
               -password "S67GBTB83D3Y"
 
-            # Move downloaded depot folder to output/<id>
-            Get-ChildItem -Directory -Filter "depots" | ForEach-Object {
-              Move-Item $_.FullName "output/$trimmed/depots" -Force
+            # Find depot folders: depots/431960/*
+            $depotPath = Get-ChildItem -Path "depots/431960" -Directory -ErrorAction SilentlyContinue
+
+            foreach ($folder in $depotPath) {
+              # Allow duplicates: add incremental suffix
+              $counter = 1
+              $dest = "$output/$($folder.Name)"
+              while (Test-Path $dest) {
+                $counter++
+                $dest = "$output/$($folder.Name)_$counter"
+              }
+
+              Copy-Item -Path $folder.FullName -Destination $dest -Recurse -Force
             }
+
+            # Cleanup depots folder so next run is clean
+            Remove-Item -Recurse -Force "depots" -ErrorAction SilentlyContinue
           }
 
       - name: Upload all downloaded content
