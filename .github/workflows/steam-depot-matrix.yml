@@ -8,7 +8,7 @@ on:
         required: true
 
       app_id:
-        description: "Steam App ID (default = 431960)"
+        description: "Steam App ID"
         required: false
         default: "431960"
 
@@ -31,13 +31,13 @@ jobs:
           7z x release.rar -orelease
 
       - name: Run DepotDownloaderMod.exe
-        run: >
-          release/Release/net9.0/DepotDownloaderMod.exe
-          -app ${{ github.event.inputs.app_id }}
-          -pubfile ${{ github.event.inputs.pubfileid }}
-          -verify-all
-          -username "ruiiixx"
-          -password "S67GBTB83D3Y"
+        run: |
+          release/Release/net9.0/DepotDownloaderMod.exe ^
+            -app ${{ github.event.inputs.app_id }} ^
+            -pubfile ${{ github.event.inputs.pubfileid }} ^
+            -verify-all ^
+            -username "ruiiixx" ^
+            -password "S67GBTB83D3Y"
 
       - name: Upload downloaded content
         uses: actions/upload-artifact@v4
