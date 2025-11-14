@@ -14,24 +14,18 @@ on:
 
 jobs:
   prepare:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     outputs:
       ids: ${{ steps.split.outputs.ids }}
 
     steps:
       - id: split
         run: |
-          ids=$(echo "${{ github.event.inputs.pubfileids }}" | awk -F',' '{printf("["); for(i=1;i<=NF;i++){printf("\""$i"\""); if(i<NF) printf(",");} printf("]")}')
-          echo "ids=$ids" >> $GITHUB_OUTPUT
+          $input = "${{ github.event.inputs.pubfileids }}"
+          $arr = $input.Split(",") | ForEach-Object { "`"$_`"" }
+          $json = "[" + ($arr -join ",") + "]"
+          echo "ids=$json" >> $env:GITHUB_OUTPUT
 
-  download:
-    needs: prepare
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        pubfileid: ${{ fromJson(needs.prepare.outputs.ids) }}
-
-    steps:
       - name: Install .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -44,6 +38,32 @@ jobs:
       - name: Extract RAR
         run: |
           7z x release.rar -orelease
+
+      - name: Upload prepared EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: depot_downloader_extracted
+          path: release
+  
+
+  download:
+    needs: prepare
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        pubfileid: ${{ fromJson(needs.prepare.outputs.ids) }}
+
+    steps:
+      - name: Download Prepared EXE
+        uses: actions/download-artifact@v4
+        with:
+          name: depot_downloader_extracted
+          path: release
+
+      - name: Install .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
 
       - name: Run DepotDownloaderMod.exe
         run: |
