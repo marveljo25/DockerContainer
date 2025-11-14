@@ -3,18 +3,33 @@ name: DepotDownloaderMod EXE Downloader
 on:
   workflow_dispatch:
     inputs:
-      pubfileid:
-        description: "Workshop pubfile ID"
+      pubfileids:
+        description: "Comma-separated Workshop pubfile IDs"
         required: true
 
       app_id:
-        description: "Steam App ID"
+        description: "Steam App ID (default = 431960)"
         required: false
         default: "431960"
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      ids: ${{ steps.split.outputs.ids }}
+
+    steps:
+      - id: split
+        run: |
+          ids=$(echo "${{ github.event.inputs.pubfileids }}" | awk -F',' '{printf("["); for(i=1;i<=NF;i++){printf("\""$i"\""); if(i<NF) printf(",");} printf("]")}')
+          echo "ids=$ids" >> $GITHUB_OUTPUT
+
   download:
+    needs: prepare
     runs-on: windows-latest
+    strategy:
+      matrix:
+        pubfileid: ${{ fromJson(needs.prepare.outputs.ids) }}
 
     steps:
       - name: Install .NET
@@ -34,13 +49,13 @@ jobs:
         run: |
           release/Release/net9.0/DepotDownloaderMod.exe ^
             -app ${{ github.event.inputs.app_id }} ^
-            -pubfile ${{ github.event.inputs.pubfileid }} ^
+            -pubfile ${{ matrix.pubfileid }} ^
             -verify-all ^
             -username "ruiiixx" ^
             -password "S67GBTB83D3Y"
 
-      - name: Upload downloaded content
+      - name: Upload ONLY depots folder
         uses: actions/upload-artifact@v4
         with:
-          name: depotdownload
-          path: .
+          name: depot_${{ matrix.pubfileid }}
+          path: depots
