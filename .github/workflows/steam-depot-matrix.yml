@@ -19,57 +19,52 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Pull SteamCMD Docker image
-        run: docker pull cm2network/steamcmd
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y unzip dotnet-sdk-8.0
+
+      - name: Download DepotDownloaderMod latest release
+        run: |
+          LATEST_URL=$(curl -s https://api.github.com/repos/SteamAutoCracks/DepotDownloaderMod/releases/latest \
+            | grep "browser_download_url" | grep "linux" | cut -d '"' -f 4)
+
+          echo "Downloading: $LATEST_URL"
+          wget -O depotdownloader.zip "$LATEST_URL"
+          unzip depotdownloader.zip -d depot
 
       - name: Prepare workspace folder
         run: mkdir -p ${{ github.workspace }}/workshop_content
 
-      - name: Download Workshop items sequentially
+      - name: Download workshop items using DepotDownloaderMod
         run: |
           set -e
-
+          
           STEAM_USERNAME="ruiiixx"
           STEAM_PASSWORD="S67GBTB83D3Y"
+
           APPID="${{ github.event.inputs.app_id }}"
           WORKSHOP_IDS="${{ github.event.inputs.workshop_ids }}"
 
-          # Split comma-separated IDs into array
           IFS=',' read -ra IDS <<< "$WORKSHOP_IDS"
 
-          for WORKSHOPID in "${IDS[@]}"; do
-            echo "Downloading Workshop ID $WORKSHOPID..."
-            CONTAINER_NAME="steam_${WORKSHOPID}_$$"
+          for WORKSHOP_ID in "${IDS[@]}"; do
+            echo "Downloading Workshop ID: $WORKSHOP_ID"
 
-            # Run SteamCMD in Docker with force_install_dir
-            docker run --name $CONTAINER_NAME \
-              cm2network/steamcmd \
-              /home/steam/steamcmd/steamcmd.sh \
-              +force_install_dir "/home/steam/Steam/steamapps/workshop/content/$APPID/$WORKSHOPID" \
-              +login $STEAM_USERNAME $STEAM_PASSWORD \
-              +workshop_download_item $APPID $WORKSHOPID validate \
-              +quit
+            OUTDIR="${{ github.workspace }}/workshop_content/$WORKSHOP_ID"
+            mkdir -p "$OUTDIR"
 
-            # Flatten files into GitHub workspace
-            DEST_DIR="${{ github.workspace }}/workshop_content/$WORKSHOPID"
-            mkdir -p "$DEST_DIR"
+            dotnet depot/DepotDownloader.dll \
+              -app $APPID \
+              -pubfile $WORKSHOP_ID \
+              -username "$STEAM_USERNAME" \
+              -password "$STEAM_PASSWORD" \
+              -dir "$OUTDIR"
 
-            # Copy contents from container
-            docker cp $CONTAINER_NAME:/home/steam/Steam/steamapps/workshop/content/$APPID/$WORKSHOPID/. "$DEST_DIR/"
-
-            # Remove nested Steam folders if exist
-            if [ -d "$DEST_DIR/steamapps" ]; then
-              mv "$DEST_DIR/steamapps/workshop/content/$APPID/$WORKSHOPID/"* "$DEST_DIR/"
-              rm -rf "$DEST_DIR/steamapps"
-            fi
-
-            # Remove container
-            docker rm $CONTAINER_NAME
-
-            echo "Downloaded $WORKSHOPID successfully."
+            echo "Finished: $WORKSHOP_ID"
           done
 
-      - name: Upload all Workshop items as artifact
+      - name: Upload all workshop items
         uses: actions/upload-artifact@v4
         with:
           name: wallpaper-workshop-items
