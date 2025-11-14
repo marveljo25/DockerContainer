@@ -4,61 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       pubfileids:
-        description: "Comma-separated Workshop pubfile IDs"
+        description: "Comma-separated Workshop pubfile IDs (e.g. 2898186348,1181580583)"
         required: true
 
-      parallel_count:
-        description: "How many downloads run at once (default = 3)"
-        required: false
-        default: "3"
-
       app_id:
-        description: "Steam App ID (default = 431960)"
+        description: "Steam App ID"
         required: false
         default: "431960"
 
 jobs:
-  prepare:
-    runs-on: ubuntu-latest
-    outputs:
-      batches: ${{ steps.makebatches.outputs.batches }}
-
-    steps:
-      - id: makebatches
-        run: |
-          ids=($(echo "${{ github.event.inputs.pubfileids }}" | tr ',' ' '))
-          batchsize=${{ github.event.inputs.parallel_count }}
-
-          json="["
-          batch=""
-          count=0
-
-          for id in "${ids[@]}"; do
-            if [ $count -ge $batchsize ]; then
-              json="$json[$batch],"
-              batch=""
-              count=0
-            fi
-
-            if [ "$batch" = "" ]; then
-              batch="\"$id\""
-            else
-              batch="$batch, \"$id\""
-            fi
-
-            count=$((count+1))
-          done
-
-          json="$json[$batch]]"
-          echo "batches=$json" >> $GITHUB_OUTPUT
-
-
   download:
-    needs: prepare
     runs-on: windows-latest
-    strategy:
-      matrix:
-        batch: ${{ fromJson(needs.prepare.outputs.batches) }}
 
     steps:
       - name: Install .NET
@@ -74,34 +30,34 @@ jobs:
         run: |
           7z x release.rar -orelease
 
-      - name: Run Parallel Downloads (PowerShell)
+      - name: Process Each pubfile ID
         shell: pwsh
         run: |
-          # Convert JSON array to PowerShell array
-          $ids = ConvertFrom-Json '${{ toJson(matrix.batch) }}'
-          Write-Host "IDs to download: $ids"
-
-          $jobs = @()
+          $ids = "${{ github.event.inputs.pubfileids }}".Split(",")
 
           foreach ($id in $ids) {
-            Write-Host "Starting download for $id"
+            $trimmed = $id.Trim()
+            echo "Processing pubfile ID: $trimmed"
 
-            $jobs += Start-Job -ScriptBlock {
-              param($id)
-              & release/Release/net9.0/DepotDownloaderMod.exe `
-                -app "${{ github.event.inputs.app_id }}" `
-                -pubfile $id `
-                -verify-all `
-                -username "ruiiixx" `
-                -password "S67GBTB83D3Y"
-            } -ArgumentList $id
+            # Make dedicated output folder for each ID
+            New-Item -ItemType Directory -Force -Path "output/$trimmed" | Out-Null
+
+            # Run EXE for this pubfile
+            & release/Release/net9.0/DepotDownloaderMod.exe `
+              -app ${{ github.event.inputs.app_id }} `
+              -pubfile $trimmed `
+              -verify-all `
+              -username "ruiiixx" `
+              -password "S67GBTB83D3Y"
+
+            # Move downloaded depot folder to output/<id>
+            Get-ChildItem -Directory -Filter "depots" | ForEach-Object {
+              Move-Item $_.FullName "output/$trimmed/depots" -Force
+            }
           }
 
-          Write-Host "Waiting for all downloads to finish..."
-          $jobs | Wait-Job | Receive-Job
-
-      - name: Upload depots folder
+      - name: Upload all downloaded content
         uses: actions/upload-artifact@v4
         with:
-          name: depots_batch
-          path: depots
+          name: depotdownload
+          path: output
