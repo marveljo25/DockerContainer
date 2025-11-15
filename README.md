@@ -14,3 +14,7 @@ The tool is currently defaulting to Wallpaper engine
 - Supports **custom Steam username**   
 - Saves output as zip
 
+---
+## How to use 
+
+- Clone this repo, run it in github action
